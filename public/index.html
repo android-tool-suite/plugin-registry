@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Android Tool Suite 插件仓库</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { max-width: 920px; margin: 0 auto; padding: 32px 20px 64px; }
+    header { margin-bottom: 28px; }
+    .muted { opacity: .72; }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit,minmax(260px,1fr)); }
+    .card { border: 1px solid color-mix(in srgb,currentColor 18%,transparent); border-radius: 18px; padding: 18px; }
+    .tag { display: inline-block; border-radius: 999px; padding: 4px 9px; background: color-mix(in srgb,#16a085 22%,transparent); }
+    a { color: #16a085; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Android Tool Suite 插件仓库</h1>
+    <p class="muted">这里只收录 Android Tool Suite 组织维护的官方插件。插件与宿主同进程运行，请只安装可信代码。</p>
+    <p id="status">正在读取签名索引…</p>
+  </header>
+  <main id="plugins" class="grid"></main>
+  <script>
+    fetch('./index-v1.json', {cache: 'no-cache'}).then(r => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    }).then(index => {
+      document.querySelector('#status').textContent =
+        `索引生成于 ${index.generatedAt}，共 ${index.plugins.length} 个插件。`;
+      const root = document.querySelector('#plugins');
+      for (const plugin of index.plugins) {
+        const card = document.createElement('article');
+        card.className = 'card';
+        card.innerHTML = `<span class="tag">v${plugin.versionName}</span>
+          <h2></h2><p class="description"></p><p class="muted"></p><a>查看 Release</a>`;
+        card.querySelector('h2').textContent = plugin.title;
+        card.querySelector('.description').textContent = plugin.description;
+        card.querySelectorAll('p')[1].textContent = plugin.author;
+        const link = card.querySelector('a');
+        link.href = plugin.releaseUrl;
+        link.rel = 'noopener';
+        root.append(card);
+      }
+    }).catch(error => {
+      document.querySelector('#status').textContent = `索引暂不可用：${error.message}`;
+    });
+  </script>
+</body>
+</html>

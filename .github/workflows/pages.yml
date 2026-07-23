@@ -1,0 +1,67 @@
+name: Build and deploy signed registry
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - sources.json
+      - scripts/**
+      - public/**
+      - registry-public.pem
+      - .github/workflows/pages.yml
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+
+      - name: Test generator
+        run: python -m unittest discover -s tests -v
+
+      - name: Build release index
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/build-registry.py --sources sources.json --output public/index-v1.json
+
+      - name: Sign and verify index
+        env:
+          REGISTRY_SIGNING_KEY_PEM: ${{ secrets.REGISTRY_SIGNING_KEY_PEM }}
+        run: |
+          test -n "$REGISTRY_SIGNING_KEY_PEM"
+          printf '%s\n' "$REGISTRY_SIGNING_KEY_PEM" > "$RUNNER_TEMP/registry-private.pem"
+          chmod 600 "$RUNNER_TEMP/registry-private.pem"
+          openssl dgst -sha256 -sign "$RUNNER_TEMP/registry-private.pem" \
+            -out public/index-v1.json.sig public/index-v1.json
+          openssl dgst -sha256 -verify registry-public.pem \
+            -signature public/index-v1.json.sig public/index-v1.json
+
+      - name: Configure Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0
+        with:
+          path: public
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e

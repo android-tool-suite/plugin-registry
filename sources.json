@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "app": {
+    "repository": "android-tool-suite/app",
+    "artifactName": "android-tool-suite.apk"
+  },
+  "plugins": [
+    {
+      "id": "accessibility_grant",
+      "repository": "android-tool-suite/plugin-accessibility-grant",
+      "artifactName": "accessibility-grant.atsplugin"
+    },
+    {
+      "id": "phigros_advisor",
+      "repository": "android-tool-suite/plugin-phigros-advisor",
+      "artifactName": "phigros-advisor.atsplugin"
+    },
+    {
+      "id": "gacha_analysis",
+      "repository": "android-tool-suite/plugin-gacha-analysis",
+      "artifactName": "gacha-analysis.atsplugin"
+    }
+  ]
+}
