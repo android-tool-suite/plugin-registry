@@ -12,6 +12,10 @@
     .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit,minmax(260px,1fr)); }
     .card { border: 1px solid color-mix(in srgb,currentColor 18%,transparent); border-radius: 18px; padding: 18px; }
     .tag { display: inline-block; border-radius: 999px; padding: 4px 9px; background: color-mix(in srgb,#16a085 22%,transparent); }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 24px; }
+    button, input { font: inherit; border: 1px solid color-mix(in srgb,currentColor 24%,transparent); border-radius: 12px; padding: 9px 12px; background: transparent; color: inherit; }
+    button.active { color: white; background: #168f7a; border-color: #168f7a; }
+    input { flex: 1; min-width: 220px; }
     a { color: #16a085; }
   </style>
 </head>
@@ -19,22 +23,35 @@
   <header>
     <h1>Android Tool Suite 插件仓库</h1>
     <p class="muted">这里只收录 Android Tool Suite 组织维护的官方插件。插件与宿主同进程运行，请只安装可信代码。</p>
+    <div class="toolbar">
+      <button type="button" data-channel="release" class="active">正式仓库</button>
+      <button type="button" data-channel="debug">调试仓库</button>
+      <input id="search" type="search" placeholder="搜索插件名称、作者或说明">
+    </div>
     <p id="status">正在读取签名索引…</p>
   </header>
   <main id="plugins" class="grid"></main>
   <script>
-    fetch('./index-v1.json', {cache: 'no-cache'}).then(r => {
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return r.json();
-    }).then(index => {
-      document.querySelector('#status').textContent =
-        `索引生成于 ${index.generatedAt}，共 ${index.plugins.length} 个插件。`;
+    let currentChannel = 'release';
+    let currentIndex = null;
+
+    function render() {
       const root = document.querySelector('#plugins');
-      for (const plugin of index.plugins) {
+      root.replaceChildren();
+      if (!currentIndex) return;
+      const keyword = document.querySelector('#search').value.trim().toLocaleLowerCase();
+      const plugins = currentIndex.plugins.filter(plugin =>
+        [plugin.title, plugin.author, plugin.description].join(' ').toLocaleLowerCase().includes(keyword));
+      document.querySelector('#status').textContent =
+        `索引生成于 ${currentIndex.generatedAt}，显示 ${plugins.length} / ${currentIndex.plugins.length} 个插件。`;
+      for (const plugin of plugins) {
         const card = document.createElement('article');
         card.className = 'card';
         card.innerHTML = `<span class="tag">v${plugin.versionName}</span>
           <h2></h2><p class="description"></p><p class="muted"></p><a>查看 Release</a>`;
+        if (currentChannel === 'debug') {
+          card.querySelector('.tag').textContent += ` · ${plugin.commitSha.slice(0, 7)}`;
+        }
         card.querySelector('h2').textContent = plugin.title;
         card.querySelector('.description').textContent = plugin.description;
         card.querySelectorAll('p')[1].textContent = plugin.author;
@@ -43,9 +60,30 @@
         link.rel = 'noopener';
         root.append(card);
       }
-    }).catch(error => {
-      document.querySelector('#status').textContent = `索引暂不可用：${error.message}`;
-    });
+    }
+
+    function load(channel) {
+      currentChannel = channel;
+      currentIndex = null;
+      document.querySelector('#status').textContent = '正在读取签名索引…';
+      document.querySelectorAll('[data-channel]').forEach(button =>
+        button.classList.toggle('active', button.dataset.channel === channel));
+      fetch(`./${channel}/index-v1.json`, {cache: 'no-cache'}).then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      }).then(index => {
+        currentIndex = index;
+        render();
+      }).catch(error => {
+        document.querySelector('#plugins').replaceChildren();
+        document.querySelector('#status').textContent = `索引暂不可用：${error.message}`;
+      });
+    }
+
+    document.querySelectorAll('[data-channel]').forEach(button =>
+      button.addEventListener('click', () => load(button.dataset.channel)));
+    document.querySelector('#search').addEventListener('input', render);
+    load('release');
   </script>
 </body>
 </html>

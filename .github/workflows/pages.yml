@@ -7,11 +7,13 @@ on:
     paths:
       - sources.json
       - scripts/**
+      - tests/**
       - public/**
       - registry-public.pem
       - .github/workflows/pages.yml
-  schedule:
-    - cron: '*/15 * * * *'
+  repository_dispatch:
+    types:
+      - component_published
   workflow_dispatch:
 
 permissions:
@@ -26,6 +28,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -37,22 +40,34 @@ jobs:
       - name: Test generator
         run: python -m unittest discover -s tests -v
 
-      - name: Build release index
+      - name: Build release and debug indexes
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python scripts/build-registry.py --sources sources.json --output public/index-v1.json
+        run: |
+          python scripts/build-registry.py \
+            --sources sources.json \
+            --channel release \
+            --output public/release/index-v1.json
+          python scripts/build-registry.py \
+            --sources sources.json \
+            --channel debug \
+            --output public/debug/index-v1.json
 
-      - name: Sign and verify index
+      - name: Sign and verify indexes
         env:
           REGISTRY_SIGNING_KEY_PEM: ${{ secrets.REGISTRY_SIGNING_KEY_PEM }}
         run: |
           test -n "$REGISTRY_SIGNING_KEY_PEM"
           printf '%s\n' "$REGISTRY_SIGNING_KEY_PEM" > "$RUNNER_TEMP/registry-private.pem"
           chmod 600 "$RUNNER_TEMP/registry-private.pem"
-          openssl dgst -sha256 -sign "$RUNNER_TEMP/registry-private.pem" \
-            -out public/index-v1.json.sig public/index-v1.json
-          openssl dgst -sha256 -verify registry-public.pem \
-            -signature public/index-v1.json.sig public/index-v1.json
+          for channel in release debug; do
+            openssl dgst -sha256 -sign "$RUNNER_TEMP/registry-private.pem" \
+              -out "public/$channel/index-v1.json.sig" "public/$channel/index-v1.json"
+            openssl dgst -sha256 -verify registry-public.pem \
+              -signature "public/$channel/index-v1.json.sig" "public/$channel/index-v1.json"
+          done
+          cp public/release/index-v1.json public/index-v1.json
+          cp public/release/index-v1.json.sig public/index-v1.json.sig
 
       - name: Configure Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b
