@@ -2,7 +2,10 @@
   "schemaVersion": 2,
   "app": {
     "repository": "android-tool-suite/app",
-    "artifactName": "android-tool-suite.apk"
+    "artifactNames": {
+      "release": "android-tool-suite.apk",
+      "debug": "android-tool-suite-debug.apk"
+    }
   },
   "pluginDiscovery": {
     "organization": "android-tool-suite",

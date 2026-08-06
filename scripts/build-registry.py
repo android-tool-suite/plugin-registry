@@ -76,7 +76,12 @@ def build_release_entry(
     if metadata_channel != channel:
         raise ValueError(f"metadata channel mismatch for {source['repository']}")
 
-    artifact_name = source.get("artifactName") or metadata.get("artifactName")
+    artifact_names = source.get("artifactNames", {})
+    artifact_name = (
+        artifact_names.get(channel)
+        or source.get("artifactName")
+        or metadata.get("artifactName")
+    )
     if not artifact_name or metadata.get("artifactName") != artifact_name:
         raise ValueError(f"metadata artifact mismatch for {source['repository']}")
     artifact = asset_by_name(release, artifact_name)
@@ -172,11 +177,11 @@ def build_index(
         raise ValueError(f"unsupported channel: {channel}")
     debug_tag = sources.get("debugTag", "debug")
 
-    app_entry = None
-    if channel == "release":
-        app_source = dict(sources["app"])
-        app_source["type"] = "app"
-        app_entry = fetch_entry(app_source, channel, debug_tag, token)
+    app_source = dict(sources["app"])
+    app_source["type"] = "app"
+    if channel == "debug":
+        app_source["tag"] = debug_tag
+    app_entry = fetch_entry(app_source, channel, debug_tag, token)
 
     plugins = []
     for source in discover_plugin_sources(sources["pluginDiscovery"], token):

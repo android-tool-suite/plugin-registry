@@ -14,7 +14,7 @@
 
 本仓库不再定时轮询组件仓库。应用或插件工作流完成发布后，通过 GitHub `repository_dispatch` 发送 `component_published` 事件；本仓库随后重新生成两个索引并部署 GitHub Pages。短时间内的多个事件由 Actions 并发组自动合并，最终部署最新状态。
 
-各组件仓库需要配置 `REGISTRY_DISPATCH_TOKEN`。建议使用只授权 `android-tool-suite/plugin-registry` 的 fine-grained personal access token，并授予创建 Repository Dispatch 所需的 Contents 写权限；再把它保存为组织级 Actions Secret，仅授权 `app` 和三个插件仓库使用。也可以分别创建同名仓库 Secret。组件工作流只用它发送事件，不把令牌写入产物或日志。
+各组件仓库通过组织 GitHub App `android-tool-suite-registry-app` 创建短时 installation token。组织变量 `REGISTRY_APP_CLIENT_ID` 和 Secret `REGISTRY_APP_PRIVATE_KEY` 只开放给 `app` 与三个插件仓库；App 仅安装到 `plugin-registry`，并只具有 Contents 写权限。任务结束后令牌自动撤销，不把凭据写入产物或日志。
 
 若事件发送失败，可在 Actions 页面手动运行 `Build and deploy signed registry`。这是一条恢复路径，不需要重新发布组件。
 
@@ -34,7 +34,7 @@
 
 1. 在 Actions Secret 中创建 `REGISTRY_SIGNING_KEY_PEM`，内容为与 `registry-public.pem` 匹配的私钥。
 2. 在 Settings → Pages 中选择 GitHub Actions 作为部署来源。
-3. 为组件仓库提供上文所述的 `REGISTRY_DISPATCH_TOKEN`。
+3. 创建并安装上文所述的 GitHub App，为组件仓库提供 `REGISTRY_APP_CLIENT_ID` 和 `REGISTRY_APP_PRIVATE_KEY`。
 
 集成工作区把本仓库作为 `plugin-registry/` 子模块锁定；索引生成器测试也会进入外层 `tools/build-all.ps1` 的正式验收流程。运行时索引仍由本仓库自己的 Pages 工作流发布，外层 gitlink 不参与在线更新。
 

@@ -82,6 +82,59 @@ class RegistryBuilderTest(unittest.TestCase):
         self.assertEqual("a" * 40, entry["commitSha"])
         self.assertEqual("ef" * 32, entry["sha256"])
 
+    def test_debug_app_uses_channel_artifact_and_package(self):
+        source = {
+            "repository": "owner/app",
+            "type": "app",
+            "tag": "debug",
+            "artifactNames": {
+                "release": "app.apk",
+                "debug": "app-debug.apk",
+            },
+        }
+        release = {
+            "tag_name": "debug",
+            "html_url": "https://github.test/debug",
+            "published_at": "2026-08-07T00:00:00Z",
+            "assets": [{
+                "name": "app-debug.apk",
+                "browser_download_url": "https://github.test/app-debug.apk",
+                "size": 42,
+                "digest": "sha256:" + "ac" * 32,
+            }],
+        }
+        metadata = {
+            "schemaVersion": 1,
+            "type": "app",
+            "channel": "debug",
+            "commitSha": "b" * 40,
+            "packageName": "com.androidtoolsuite.app.debug",
+            "versionName": "1.3.1",
+            "versionCode": 13,
+            "minSdk": 24,
+            "artifactName": "app-debug.apk",
+        }
+
+        entry = MODULE.build_release_entry(source, release, metadata, "debug")
+
+        self.assertEqual("com.androidtoolsuite.app.debug", entry["packageName"])
+        self.assertEqual("debug", entry["channel"])
+        self.assertEqual("b" * 40, entry["commitSha"])
+
+    def test_build_debug_index_includes_app(self):
+        sources = {
+            "schemaVersion": 2,
+            "app": {"repository": "owner/app"},
+            "pluginDiscovery": {},
+            "debugTag": "debug",
+        }
+        app_entry = {"packageName": "com.androidtoolsuite.app.debug"}
+        with mock.patch.object(MODULE, "fetch_entry", return_value=app_entry), \
+                mock.patch.object(MODULE, "discover_plugin_sources", return_value=[]):
+            index = MODULE.build_index(sources, "debug")
+
+        self.assertEqual(app_entry, index["app"])
+
     def test_rejects_missing_digest(self):
         source = {"repository": "owner/app", "artifactName": "app.apk", "type": "app"}
         release = {
