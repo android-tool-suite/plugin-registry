@@ -3,86 +3,251 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Android Tool Suite 插件仓库</title>
+  <meta name="description" content="Android Tool Suite 应用与官方插件的正式版、调试版和历史版本下载。">
+  <title>Android Tool Suite 发布中心</title>
   <style>
-    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-    body { max-width: 920px; margin: 0 auto; padding: 32px 20px 64px; }
-    header { margin-bottom: 28px; }
-    .muted { opacity: .72; }
-    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit,minmax(260px,1fr)); }
-    .card { border: 1px solid color-mix(in srgb,currentColor 18%,transparent); border-radius: 18px; padding: 18px; }
-    .tag { display: inline-block; border-radius: 999px; padding: 4px 9px; background: color-mix(in srgb,#16a085 22%,transparent); }
-    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 24px; }
-    button, input { font: inherit; border: 1px solid color-mix(in srgb,currentColor 24%,transparent); border-radius: 12px; padding: 9px 12px; background: transparent; color: inherit; }
-    button.active { color: white; background: #168f7a; border-color: #168f7a; }
-    input { flex: 1; min-width: 220px; }
-    a { color: #16a085; }
+    :root {
+      color-scheme: light dark;
+      font-family: Inter, "Noto Sans SC", system-ui, sans-serif;
+      --accent: #168f7a;
+      --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+      --border: color-mix(in srgb, currentColor 16%, transparent);
+      --surface: color-mix(in srgb, Canvas 94%, var(--accent) 6%);
+    }
+    * { box-sizing: border-box; }
+    body { max-width: 1080px; margin: 0 auto; padding: 36px 20px 72px; }
+    header { margin-bottom: 32px; }
+    h1 { font-size: clamp(2rem, 5vw, 3.2rem); margin: 0 0 12px; letter-spacing: -.04em; }
+    h2 { margin: 0 0 16px; }
+    h3 { margin: 12px 0 8px; }
+    p { line-height: 1.65; }
+    .muted { opacity: .7; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 14px; }
+    button, input, select {
+      font: inherit;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 13px;
+      background: Canvas;
+      color: CanvasText;
+    }
+    button { cursor: pointer; }
+    button.active { color: white; background: var(--accent); border-color: var(--accent); }
+    input { flex: 1; min-width: 240px; }
+    section { margin-top: 34px; }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit,minmax(290px,1fr)); }
+    .card { border: 1px solid var(--border); border-radius: 20px; padding: 20px; background: var(--surface); }
+    .app-card { display: grid; grid-template-columns: minmax(0,1fr); max-width: 700px; }
+    .tag { display: inline-flex; width: fit-content; border-radius: 999px; padding: 5px 10px; background: var(--accent-soft); color: var(--accent); font-weight: 650; }
+    .version-picker { display: grid; gap: 8px; margin-top: 16px; }
+    .version-picker label { font-size: .88rem; font-weight: 650; }
+    .version-picker select { width: 100%; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    .actions a { display: inline-flex; align-items: center; text-decoration: none; border-radius: 12px; padding: 10px 14px; border: 1px solid var(--border); color: inherit; }
+    .actions a.primary { background: var(--accent); border-color: var(--accent); color: white; font-weight: 650; }
+    .version-meta { min-height: 3.4em; margin: 12px 0 0; font-size: .9rem; }
+    .empty { border: 1px dashed var(--border); border-radius: 16px; padding: 20px; }
+    footer { margin-top: 44px; padding-top: 20px; border-top: 1px solid var(--border); }
+    a { color: var(--accent); }
+    @media (min-width: 760px) {
+      .app-card { grid-template-columns: minmax(0,1fr) minmax(280px,.8fr); gap: 28px; align-items: center; }
+      .app-card .version-panel { align-self: stretch; }
+    }
   </style>
 </head>
 <body>
   <header>
-    <h1>Android Tool Suite 插件仓库</h1>
-    <p class="muted">这里只收录 Android Tool Suite 组织维护的官方插件。插件与宿主同进程运行，请只安装可信代码。</p>
+    <span class="tag">官方发布</span>
+    <h1>Android Tool Suite 发布中心</h1>
+    <p class="muted">下载安卓工具合集 APK 和组织维护的官方插件。正式版与调试版均保留可用的历史发布，可自行选择版本。</p>
     <div class="toolbar">
-      <button type="button" data-channel="release" class="active">正式仓库</button>
-      <button type="button" data-channel="debug">调试仓库</button>
-      <input id="search" type="search" placeholder="搜索插件名称、作者或说明">
+      <button type="button" data-channel="release" class="active">正式版</button>
+      <button type="button" data-channel="debug">调试版</button>
+      <input id="search" type="search" placeholder="搜索插件名称、作者或说明" aria-label="搜索插件">
     </div>
-    <p id="status">正在读取签名索引…</p>
+    <p id="status" class="muted" aria-live="polite">正在读取发布目录…</p>
   </header>
-  <main id="plugins" class="grid"></main>
+
+  <main>
+    <section aria-labelledby="app-heading">
+      <h2 id="app-heading">应用 APK</h2>
+      <div id="app"></div>
+    </section>
+    <section aria-labelledby="plugins-heading">
+      <h2 id="plugins-heading">官方插件</h2>
+      <div id="plugins" class="grid"></div>
+    </section>
+  </main>
+
+  <footer class="muted">
+    <p>应用和插件与宿主进程共享权限，请只安装可信发布。调试快照用于联调；日常使用建议选择正式版。</p>
+  </footer>
+
   <script>
     let currentChannel = 'release';
-    let currentIndex = null;
+    let currentCatalog = null;
 
-    function render() {
+    const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit'
+    });
+
+    function formatDate(value) {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? '发布时间未知' : dateFormatter.format(date);
+    }
+
+    function formatSize(bytes) {
+      if (!Number.isFinite(bytes)) return '大小未知';
+      return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
+    }
+
+    function versionLabel(version) {
+      const base = `v${version.versionName} (${version.versionCode})`;
+      if (currentChannel === 'debug' && version.commitSha) {
+        return `${base} · ${version.commitSha.slice(0, 7)} · ${formatDate(version.publishedAt)}`;
+      }
+      return `${base} · ${formatDate(version.publishedAt)}`;
+    }
+
+    function createVersionPanel(versions, downloadLabel) {
+      const panel = document.createElement('div');
+      panel.className = 'version-panel';
+      if (!versions.length) {
+        panel.className += ' empty';
+        panel.textContent = '此通道暂时没有可下载版本。';
+        return panel;
+      }
+
+      const picker = document.createElement('div');
+      picker.className = 'version-picker';
+      const label = document.createElement('label');
+      const select = document.createElement('select');
+      const selectId = `version-${Math.random().toString(36).slice(2)}`;
+      select.id = selectId;
+      label.htmlFor = selectId;
+      label.textContent = `选择版本（共 ${versions.length} 个）`;
+      versions.forEach((version, index) => {
+        const option = document.createElement('option');
+        option.value = String(index);
+        option.textContent = versionLabel(version);
+        select.append(option);
+      });
+      picker.append(label, select);
+
+      const meta = document.createElement('p');
+      meta.className = 'version-meta muted';
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const download = document.createElement('a');
+      download.className = 'primary';
+      download.textContent = downloadLabel;
+      const release = document.createElement('a');
+      release.textContent = '查看发布说明';
+      release.rel = 'noopener';
+      actions.append(download, release);
+
+      function selectVersion() {
+        const version = versions[Number(select.value)];
+        const commit = version.commitSha ? `，提交 ${version.commitSha.slice(0, 12)}` : '';
+        meta.textContent = `${formatSize(version.size)}，发布于 ${formatDate(version.publishedAt)}${commit}`;
+        download.href = version.downloadUrl;
+        release.href = version.releaseUrl;
+      }
+      select.addEventListener('change', selectVersion);
+      selectVersion();
+      panel.append(picker, meta, actions);
+      return panel;
+    }
+
+    function renderApp() {
+      const root = document.querySelector('#app');
+      root.replaceChildren();
+      const app = currentCatalog.app;
+      const card = document.createElement('article');
+      card.className = 'card app-card';
+      const copy = document.createElement('div');
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.textContent = currentChannel === 'release' ? '稳定版 APK' : '调试版 APK';
+      const title = document.createElement('h3');
+      title.textContent = app.title;
+      const description = document.createElement('p');
+      description.textContent = app.description;
+      copy.append(tag, title, description);
+      card.append(copy, createVersionPanel(app.versions, '下载 APK'));
+      root.append(card);
+    }
+
+    function renderPlugins() {
+      if (!currentCatalog) return;
       const root = document.querySelector('#plugins');
       root.replaceChildren();
-      if (!currentIndex) return;
       const keyword = document.querySelector('#search').value.trim().toLocaleLowerCase();
-      const plugins = currentIndex.plugins.filter(plugin =>
+      const plugins = currentCatalog.plugins.filter(plugin =>
         [plugin.title, plugin.author, plugin.description].join(' ').toLocaleLowerCase().includes(keyword));
-      document.querySelector('#status').textContent =
-        `索引生成于 ${currentIndex.generatedAt}，显示 ${plugins.length} / ${currentIndex.plugins.length} 个插件。`;
+
       for (const plugin of plugins) {
         const card = document.createElement('article');
         card.className = 'card';
-        card.innerHTML = `<span class="tag">v${plugin.versionName}</span>
-          <h2></h2><p class="description"></p><p class="muted"></p><a>查看 Release</a>`;
-        if (currentChannel === 'debug') {
-          card.querySelector('.tag').textContent += ` · ${plugin.commitSha.slice(0, 7)}`;
-        }
-        card.querySelector('h2').textContent = plugin.title;
-        card.querySelector('.description').textContent = plugin.description;
-        card.querySelectorAll('p')[1].textContent = plugin.author;
-        const link = card.querySelector('a');
-        link.href = plugin.releaseUrl;
-        link.rel = 'noopener';
+        const tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = `${plugin.versions.length} 个版本`;
+        const title = document.createElement('h3');
+        title.textContent = plugin.title;
+        const description = document.createElement('p');
+        description.textContent = plugin.description;
+        const author = document.createElement('p');
+        author.className = 'muted';
+        author.textContent = plugin.author;
+        card.append(tag, title, description, author,
+          createVersionPanel(plugin.versions, '下载插件包'));
         root.append(card);
       }
+      if (!plugins.length) {
+        const empty = document.createElement('p');
+        empty.className = 'empty muted';
+        empty.textContent = '没有匹配的插件。';
+        root.append(empty);
+      }
+      const appVersionCount = currentCatalog.app.versions.length;
+      const pluginVersionCount = currentCatalog.plugins.reduce(
+        (total, plugin) => total + plugin.versions.length, 0);
+      document.querySelector('#status').textContent =
+        `目录生成于 ${formatDate(currentCatalog.generatedAt)}；应用 ${appVersionCount} 个版本，插件 ${pluginVersionCount} 个版本。`;
     }
 
-    function load(channel) {
+    function render() {
+      if (!currentCatalog) return;
+      renderApp();
+      renderPlugins();
+    }
+
+    async function load(channel) {
       currentChannel = channel;
-      currentIndex = null;
-      document.querySelector('#status').textContent = '正在读取签名索引…';
+      currentCatalog = null;
+      document.querySelector('#status').textContent = '正在读取发布目录…';
+      document.querySelector('#app').replaceChildren();
+      document.querySelector('#plugins').replaceChildren();
       document.querySelectorAll('[data-channel]').forEach(button =>
         button.classList.toggle('active', button.dataset.channel === channel));
-      fetch(`./${channel}/index-v1.json`, {cache: 'no-cache'}).then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      }).then(index => {
-        currentIndex = index;
+      try {
+        const response = await fetch(`./${channel}/catalog-v1.json`, {cache: 'no-cache'});
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const catalog = await response.json();
+        if (catalog.schemaVersion !== 1 || catalog.channel !== channel) {
+          throw new Error('目录格式或通道不匹配');
+        }
+        currentCatalog = catalog;
         render();
-      }).catch(error => {
-        document.querySelector('#plugins').replaceChildren();
-        document.querySelector('#status').textContent = `索引暂不可用：${error.message}`;
-      });
+      } catch (error) {
+        document.querySelector('#status').textContent = `发布目录暂不可用：${error.message}`;
+      }
     }
 
     document.querySelectorAll('[data-channel]').forEach(button =>
       button.addEventListener('click', () => load(button.dataset.channel)));
-    document.querySelector('#search').addEventListener('input', render);
+    document.querySelector('#search').addEventListener('input', renderPlugins);
     load('release');
   </script>
 </body>

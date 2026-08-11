@@ -1,14 +1,16 @@
-# Android Tool Suite 插件仓库
+# Android Tool Suite 发布中心
 
-这是 Android Tool Suite 的官方更新索引与插件目录。仓库只保存索引生成器、组织仓库发现规则、公钥和静态展示页；应用与插件二进制仍由各自的 GitHub Release 发布。
+这是 Android Tool Suite 的官方更新索引与发布目录。GitHub Pages 同时展示宿主 APK 和官方插件包，并允许在正式版、调试版及其历史版本之间选择。仓库只保存索引生成器、组织仓库发现规则、公钥和静态展示页；应用与插件二进制仍由各自的 GitHub Release 发布。
 
 ## 两个发布通道
 
 - `release/index-v1.json`：正式通道。应用读取正式版宿主和各插件最新的非预发布 Release。
 - `debug/index-v1.json`：调试通道。读取组织内所有 `plugin-*` 仓库的 `debug` 预发布；适合联调刚推送并已通过 CI 的插件。
+- `release/catalog-v1.json`：宿主和插件的全部正式历史版本，供 Pages 选择和下载。
+- `debug/catalog-v1.json`：滚动调试版本以及按完整提交 SHA 保存的不可变调试快照。
 - `index-v1.json`：正式通道的兼容地址，供旧版应用继续使用。
 
-两个索引都使用同一把 ECDSA 私钥签名，签名分别位于同目录下的 `index-v1.json.sig`。宿主内置 `registry-public.pem` 对应的公钥，并在下载插件前继续校验索引签名、资产大小和 SHA-256。
+最新索引和历史目录都使用同一把 ECDSA 私钥签名，签名位于相同目录下对应的 `.sig` 文件。宿主继续只读取兼容的最新索引，并在下载前校验索引签名、资产大小和 SHA-256；历史目录不会改变自动更新策略。
 
 ## 事件驱动更新
 
@@ -23,10 +25,10 @@
 插件仓库名称需要以 `plugin-` 开头。推送 `main` 后，组件 CI 会：
 
 1. 完成测试并构建调试 `.atsplugin`；
-2. 更新名为 `debug` 的公开预发布及其 `release-metadata.json`；
+2. 创建 `debug-<完整提交 SHA>` 的不可变历史预发布，并更新名为 `debug` 的滚动预发布；
 3. 向本仓库发送更新事件。
 
-因此新插件不需要手工修改 `sources.json`；只要位于 Android Tool Suite 组织、仓库名符合规则、CI 成功并生成规范的 `debug` 预发布，就会自动出现在调试目录。正式目录仍只读取规范的 `v<versionName>` 正式 Release。
+因此新插件不需要手工修改 `sources.json`；只要位于 Android Tool Suite 组织、仓库名符合规则、CI 成功并生成规范的调试预发布，就会自动出现在调试目录。正式目录保留所有规范的 `v<versionName>` 正式 Release，调试目录从本次改造后的首次构建开始持续保留提交快照；原先已被滚动发布覆盖的旧 Debug 二进制无法追溯恢复。
 
 宿主的插件仓库页面也保留“导入本地插件包”入口，用于不推送远程的本地联调。它属于本地导入信任路径，不会伪装成已通过仓库签名校验的插件。
 
@@ -54,11 +56,13 @@ python -m unittest discover -s tests -v
 python scripts/build-registry.py `
   --sources sources.json `
   --channel release `
-  --output public/release/index-v1.json
+  --output public/release/index-v1.json `
+  --catalog-output public/release/catalog-v1.json
 python scripts/build-registry.py `
   --sources sources.json `
   --channel debug `
-  --output public/debug/index-v1.json
+  --output public/debug/index-v1.json `
+  --catalog-output public/debug/catalog-v1.json
 ```
 
 签名验证示例：

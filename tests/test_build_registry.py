@@ -45,6 +45,7 @@ class RegistryBuilderTest(unittest.TestCase):
 
         self.assertEqual("sample", entry["id"])
         self.assertEqual("release", entry["channel"])
+        self.assertEqual("v1.0.0", entry["tagName"])
         self.assertEqual("ab" * 32, entry["sha256"])
         self.assertEqual(12, entry["size"])
         self.assertNotIn("artifactName", entry)
@@ -81,6 +82,86 @@ class RegistryBuilderTest(unittest.TestCase):
         self.assertEqual("debug", entry["channel"])
         self.assertEqual("a" * 40, entry["commitSha"])
         self.assertEqual("ef" * 32, entry["sha256"])
+
+    def test_debug_snapshot_tag_must_match_metadata_commit(self):
+        source = {"repository": "owner/sample", "type": "plugin", "tag": "debug"}
+        release = {
+            "tag_name": "debug-" + "a" * 40,
+            "html_url": "https://github.test/debug-snapshot",
+            "assets": [{
+                "name": "sample.atsplugin",
+                "browser_download_url": "https://github.test/sample.atsplugin",
+                "size": 21,
+                "digest": "sha256:" + "ef" * 32,
+            }],
+        }
+        metadata = {
+            "schemaVersion": 1,
+            "type": "plugin",
+            "channel": "debug",
+            "commitSha": "b" * 40,
+            "id": "sample",
+            "artifactName": "sample.atsplugin",
+        }
+
+        with self.assertRaisesRegex(ValueError, "snapshot tag mismatch"):
+            MODULE.build_release_entry(source, release, metadata, "debug")
+
+    def test_release_history_filters_drafts_and_other_tags(self):
+        releases = [
+            {"tag_name": "v2.0.0", "draft": False, "prerelease": False},
+            {"tag_name": "v1.0.0", "draft": True, "prerelease": False},
+            {"tag_name": "debug", "draft": False, "prerelease": True},
+            {"tag_name": "plugin-sdk-v1.0.0", "draft": False, "prerelease": False},
+        ]
+        with mock.patch.object(MODULE, "request_json", return_value=releases):
+            result = MODULE.releases_for_channel("owner/app", "release", "debug")
+
+        self.assertEqual(["v2.0.0"], [release["tag_name"] for release in result])
+
+    def test_debug_history_includes_rolling_and_commit_snapshots(self):
+        releases = [
+            {"tag_name": "debug", "draft": False, "prerelease": True},
+            {"tag_name": "debug-" + "a" * 40, "draft": False, "prerelease": True},
+            {"tag_name": "debug-short", "draft": False, "prerelease": True},
+            {"tag_name": "v1.0.0", "draft": False, "prerelease": False},
+        ]
+        with mock.patch.object(MODULE, "request_json", return_value=releases):
+            result = MODULE.releases_for_channel("owner/app", "debug", "debug")
+
+        self.assertEqual(
+            ["debug", "debug-" + "a" * 40],
+            [release["tag_name"] for release in result],
+        )
+
+    def test_fetch_entries_prefers_snapshot_over_rolling_duplicate(self):
+        commit_sha = "a" * 40
+        releases = [
+            {"tag_name": "debug", "published_at": "2026-08-01T00:00:00Z"},
+            {
+                "tag_name": "debug-" + commit_sha,
+                "published_at": "2026-08-02T00:00:00Z",
+            },
+        ]
+
+        def build_entry(_source, release, _metadata, _channel):
+            return {
+                "commitSha": commit_sha,
+                "tagName": release["tag_name"],
+                "publishedAt": release["published_at"],
+                "versionCode": 1,
+            }
+
+        with mock.patch.object(MODULE, "releases_for_channel", return_value=releases), \
+                mock.patch.object(MODULE, "asset_by_name", return_value={"browser_download_url": "metadata"}), \
+                mock.patch.object(MODULE, "request_json", return_value={}), \
+                mock.patch.object(MODULE, "build_release_entry", side_effect=build_entry):
+            entries = MODULE.fetch_entries(
+                {"repository": "owner/app"}, "debug", "debug"
+            )
+
+        self.assertEqual(1, len(entries))
+        self.assertEqual("debug-" + commit_sha, entries[0]["tagName"])
 
     def test_debug_app_uses_channel_artifact_and_package(self):
         source = {
@@ -134,6 +215,40 @@ class RegistryBuilderTest(unittest.TestCase):
             index = MODULE.build_index(sources, "debug")
 
         self.assertEqual(app_entry, index["app"])
+
+    def test_build_catalog_groups_all_app_and_plugin_versions(self):
+        sources = {
+            "schemaVersion": 2,
+            "app": {
+                "repository": "owner/app",
+                "title": "安卓工具合集",
+                "description": "宿主应用",
+            },
+            "pluginDiscovery": {},
+            "debugTag": "debug",
+        }
+        app_versions = [{"versionName": "2.0.0"}, {"versionName": "1.0.0"}]
+        plugin_versions = [{
+            "id": "sample",
+            "title": "示例插件",
+            "description": "说明",
+            "author": "作者",
+            "repositoryUrl": "https://github.test/sample",
+            "versionName": "1.0.0",
+        }]
+        with mock.patch.object(
+            MODULE,
+            "discover_plugin_sources",
+            return_value=[{"repository": "owner/sample", "type": "plugin"}],
+        ), mock.patch.object(
+            MODULE, "fetch_entries", side_effect=[app_versions, plugin_versions]
+        ):
+            catalog = MODULE.build_catalog(sources, "release")
+
+        self.assertEqual("安卓工具合集", catalog["app"]["title"])
+        self.assertEqual(app_versions, catalog["app"]["versions"])
+        self.assertEqual("sample", catalog["plugins"][0]["id"])
+        self.assertEqual(plugin_versions, catalog["plugins"][0]["versions"])
 
     def test_rejects_missing_digest(self):
         source = {"repository": "owner/app", "artifactName": "app.apk", "type": "app"}
