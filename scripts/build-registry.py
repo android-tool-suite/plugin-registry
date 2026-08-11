@@ -109,6 +109,28 @@ def asset_by_name(release: dict[str, Any], name: str) -> dict[str, Any]:
     raise ValueError(f"release {release.get('tag_name')} is missing asset {name}")
 
 
+def validate_data_compatibility(metadata: dict[str, Any]) -> None:
+    compatibility = metadata.get("dataCompatibility")
+    if compatibility is None:
+        return
+    if not isinstance(compatibility, dict) or compatibility.get("schemaVersion") != 1:
+        raise ValueError("unsupported plugin data compatibility schema")
+    names = (
+        "dataFormatVersion",
+        "minReadableDataFormatVersion",
+        "maxReadableDataFormatVersion",
+    )
+    values = []
+    for name in names:
+        value = compatibility.get(name)
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise ValueError(f"invalid plugin data compatibility field: {name}")
+        values.append(value)
+    data_format, minimum, maximum = values
+    if not minimum <= data_format <= maximum:
+        raise ValueError("invalid plugin data compatibility range")
+
+
 def build_release_entry(
     source: dict[str, Any],
     release: dict[str, Any],
@@ -140,6 +162,8 @@ def build_release_entry(
         raise ValueError(f"release asset {artifact_name} has no SHA-256 digest")
     if source.get("id") and metadata.get("id") != source["id"]:
         raise ValueError(f"plugin id mismatch for {source['repository']}")
+    if expected_type == "plugin":
+        validate_data_compatibility(metadata)
 
     if channel == "release":
         if release.get("tag_name") != f"v{metadata.get('versionName')}":

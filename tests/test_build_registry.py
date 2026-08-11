@@ -273,6 +273,22 @@ class RegistryBuilderTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             MODULE.build_release_entry(source, release, metadata, "release")
 
+    def test_rejects_invalid_plugin_data_compatibility(self):
+        metadata = {
+            "dataCompatibility": {
+                "schemaVersion": 1,
+                "dataFormatVersion": 2,
+                "minReadableDataFormatVersion": 3,
+                "maxReadableDataFormatVersion": 2,
+            }
+        }
+
+        with self.assertRaises(ValueError):
+            MODULE.validate_data_compatibility(metadata)
+
+    def test_accepts_missing_legacy_data_compatibility(self):
+        MODULE.validate_data_compatibility({})
+
     def test_rejects_release_tag_mismatch(self):
         source = {"repository": "owner/app", "artifactName": "app.apk", "type": "app"}
         release = {
