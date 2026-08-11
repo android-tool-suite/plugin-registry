@@ -163,6 +163,63 @@ class RegistryBuilderTest(unittest.TestCase):
         self.assertEqual(1, len(entries))
         self.assertEqual("debug-" + commit_sha, entries[0]["tagName"])
 
+    def test_fetch_entries_skips_temporarily_incomplete_rolling_debug(self):
+        commit_sha = "a" * 40
+        rolling = {"tag_name": "debug", "assets": []}
+        snapshot = {"tag_name": "debug-" + commit_sha}
+        snapshot_entry = {
+            "commitSha": commit_sha,
+            "tagName": snapshot["tag_name"],
+            "publishedAt": "2026-08-02T00:00:00Z",
+            "versionCode": 1,
+        }
+
+        with mock.patch.object(
+            MODULE, "releases_for_channel", return_value=[rolling, snapshot]
+        ), mock.patch.object(
+            MODULE,
+            "load_release_entry",
+            side_effect=[
+                MODULE.MissingReleaseAssetError("assets are being replaced"),
+                snapshot_entry,
+            ],
+        ):
+            entries = MODULE.fetch_entries(
+                {"repository": "owner/app"}, "debug", "debug"
+            )
+
+        self.assertEqual([snapshot_entry], entries)
+
+    def test_fetch_entry_falls_back_to_snapshot_during_rolling_update(self):
+        rolling = {"tag_name": "debug", "assets": []}
+        snapshot_entry = {"tagName": "debug-" + "a" * 40}
+
+        with mock.patch.object(
+            MODULE, "release_for_channel", return_value=rolling
+        ), mock.patch.object(
+            MODULE,
+            "load_release_entry",
+            side_effect=MODULE.MissingReleaseAssetError("metadata is not uploaded"),
+        ), mock.patch.object(
+            MODULE, "fetch_entries", return_value=[snapshot_entry]
+        ):
+            entry = MODULE.fetch_entry(
+                {"repository": "owner/app"}, "debug", "debug"
+            )
+
+        self.assertEqual(snapshot_entry, entry)
+
+    def test_fetch_entry_keeps_formal_release_asset_validation_strict(self):
+        release = {"tag_name": "v1.0.0", "assets": []}
+
+        with mock.patch.object(
+            MODULE, "release_for_channel", return_value=release
+        ):
+            with self.assertRaises(MODULE.MissingReleaseAssetError):
+                MODULE.fetch_entry(
+                    {"repository": "owner/app"}, "release", "debug"
+                )
+
     def test_debug_app_uses_channel_artifact_and_package(self):
         source = {
             "repository": "owner/app",

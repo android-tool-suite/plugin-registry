@@ -21,6 +21,10 @@ CHANNELS = {"release", "debug"}
 RELEASE_TAG_PATTERN = re.compile(r"^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
 
 
+class MissingReleaseAssetError(ValueError):
+    """Raised when a GitHub Release is visible before all assets are available."""
+
+
 def request_json(url: str, token: str | None = None) -> Any:
     headers = {
         "Accept": "application/vnd.github+json",
@@ -106,7 +110,9 @@ def asset_by_name(release: dict[str, Any], name: str) -> dict[str, Any]:
     for asset in release.get("assets", []):
         if asset.get("name") == name:
             return asset
-    raise ValueError(f"release {release.get('tag_name')} is missing asset {name}")
+    raise MissingReleaseAssetError(
+        f"release {release.get('tag_name')} is missing asset {name}"
+    )
 
 
 def validate_data_compatibility(metadata: dict[str, Any]) -> None:
@@ -198,6 +204,30 @@ def build_release_entry(
     return entry
 
 
+def load_release_entry(
+    source: dict[str, Any],
+    release: dict[str, Any],
+    channel: str,
+    token: str | None = None,
+) -> dict[str, Any]:
+    metadata_asset = asset_by_name(release, "release-metadata.json")
+    metadata = request_json(metadata_asset["browser_download_url"], token)
+    return build_release_entry(source, release, metadata, channel)
+
+
+def rolling_debug_release_is_incomplete(
+    error: Exception,
+    release: dict[str, Any],
+    channel: str,
+    debug_tag: str,
+) -> bool:
+    if channel != "debug" or release.get("tag_name") != debug_tag:
+        return False
+    if isinstance(error, MissingReleaseAssetError):
+        return True
+    return isinstance(error, urllib.error.HTTPError) and error.code == 404
+
+
 def fetch_entry(
     source: dict[str, Any],
     channel: str,
@@ -207,9 +237,15 @@ def fetch_entry(
     release = release_for_channel(source["repository"], channel, debug_tag, token)
     if release is None:
         return None
-    metadata_asset = asset_by_name(release, "release-metadata.json")
-    metadata = request_json(metadata_asset["browser_download_url"], token)
-    return build_release_entry(source, release, metadata, channel)
+    try:
+        return load_release_entry(source, release, channel, token)
+    except (MissingReleaseAssetError, urllib.error.HTTPError) as error:
+        if not rolling_debug_release_is_incomplete(
+            error, release, channel, debug_tag
+        ):
+            raise
+        entries = fetch_entries(source, channel, debug_tag, token)
+        return entries[0] if entries else None
 
 
 def fetch_entries(
@@ -222,9 +258,14 @@ def fetch_entries(
     for release in releases_for_channel(
         source["repository"], channel, debug_tag, token
     ):
-        metadata_asset = asset_by_name(release, "release-metadata.json")
-        metadata = request_json(metadata_asset["browser_download_url"], token)
-        entries.append(build_release_entry(source, release, metadata, channel))
+        try:
+            entries.append(load_release_entry(source, release, channel, token))
+        except (MissingReleaseAssetError, urllib.error.HTTPError) as error:
+            if rolling_debug_release_is_incomplete(
+                error, release, channel, debug_tag
+            ):
+                continue
+            raise
 
     entries.sort(
         key=lambda item: (
