@@ -346,6 +346,16 @@ class RegistryBuilderTest(unittest.TestCase):
     def test_accepts_missing_legacy_data_compatibility(self):
         MODULE.validate_data_compatibility({})
 
+    def test_accepts_declared_v0_read_compatibility(self):
+        MODULE.validate_data_compatibility({
+            "dataCompatibility": {
+                "schemaVersion": 1,
+                "dataFormatVersion": 1,
+                "minReadableDataFormatVersion": 0,
+                "maxReadableDataFormatVersion": 1,
+            }
+        })
+
     def test_rejects_release_tag_mismatch(self):
         source = {"repository": "owner/app", "artifactName": "app.apk", "type": "app"}
         release = {

@@ -121,15 +121,12 @@ def validate_data_compatibility(metadata: dict[str, Any]) -> None:
         return
     if not isinstance(compatibility, dict) or compatibility.get("schemaVersion") != 1:
         raise ValueError("unsupported plugin data compatibility schema")
-    names = (
-        "dataFormatVersion",
-        "minReadableDataFormatVersion",
-        "maxReadableDataFormatVersion",
-    )
+    names = ("dataFormatVersion", "minReadableDataFormatVersion", "maxReadableDataFormatVersion")
     values = []
-    for name in names:
+    for index, name in enumerate(names):
         value = compatibility.get(name)
-        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        minimum = 0 if index == 1 else 1
+        if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
             raise ValueError(f"invalid plugin data compatibility field: {name}")
         values.append(value)
     data_format, minimum, maximum = values
