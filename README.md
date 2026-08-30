@@ -18,7 +18,7 @@
 
 本仓库不再定时轮询组件仓库。应用或插件工作流完成发布后，通过 GitHub `repository_dispatch` 发送 `component_published` 事件；本仓库随后重新生成两个索引并部署 GitHub Pages。短时间内的多个事件由 Actions 并发组自动合并，最终部署最新状态。
 
-各组件仓库通过组织 GitHub App `android-tool-suite-registry-app` 创建短时 installation token。组织变量 `REGISTRY_APP_CLIENT_ID` 和 Secret `REGISTRY_APP_PRIVATE_KEY` 只开放给 `app` 与三个插件仓库；App 仅安装到 `plugin-registry`，并只具有 Contents 写权限。任务结束后令牌自动撤销，不把凭据写入产物或日志。
+各组件仓库通过组织 GitHub App `android-tool-suite-registry-app` 创建短时 installation token。组织变量 `REGISTRY_APP_CLIENT_ID` 和 Secret `REGISTRY_APP_PRIVATE_KEY` 只开放给 `app` 与四个插件仓库；App 仅安装到 `plugin-registry`，并只具有 Contents 写权限。任务结束后令牌自动撤销，不把凭据写入产物或日志。
 
 若事件发送失败，可在 Actions 页面手动运行 `Build and deploy signed registry`。这是一条恢复路径，不需要重新发布组件。
 
