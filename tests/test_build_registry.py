@@ -38,6 +38,7 @@ class RegistryBuilderTest(unittest.TestCase):
             "title": "Sample",
             "versionName": "1.0.0",
             "versionCode": 1,
+            "minAndroidApi": 26,
             "artifactName": "sample.atsplugin",
         }
 
@@ -48,7 +49,34 @@ class RegistryBuilderTest(unittest.TestCase):
         self.assertEqual("v1.0.0", entry["tagName"])
         self.assertEqual("ab" * 32, entry["sha256"])
         self.assertEqual(12, entry["size"])
+        self.assertEqual(26, entry["minAndroidApi"])
         self.assertNotIn("artifactName", entry)
+
+    def test_rejects_invalid_minimum_android_api(self):
+        source = {"id": "sample", "repository": "owner/sample", "artifactName": "sample.atsplugin"}
+        release = {
+            "tag_name": "v1.0.0",
+            "html_url": "https://github.test/release",
+            "published_at": "2026-09-01T00:00:00Z",
+            "assets": [{
+                "name": "sample.atsplugin",
+                "browser_download_url": "https://github.test/sample.atsplugin",
+                "size": 12,
+                "digest": "sha256:" + "ab" * 32,
+            }],
+        }
+        metadata = {
+            "schemaVersion": 1,
+            "type": "plugin",
+            "id": "sample",
+            "title": "Sample",
+            "versionName": "1.0.0",
+            "versionCode": 1,
+            "minAndroidApi": 23,
+            "artifactName": "sample.atsplugin",
+        }
+        with self.assertRaisesRegex(ValueError, "minAndroidApi"):
+            MODULE.build_release_entry(source, release, metadata, "release")
 
     def test_debug_entry_uses_metadata_artifact_and_commit(self):
         source = {"repository": "owner/sample", "type": "plugin", "tag": "debug"}

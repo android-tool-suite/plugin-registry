@@ -167,6 +167,13 @@ def build_release_entry(
         raise ValueError(f"plugin id mismatch for {source['repository']}")
     if expected_type == "plugin":
         validate_data_compatibility(metadata)
+        min_android_api = metadata.get("minAndroidApi", 24)
+        if (
+            isinstance(min_android_api, bool)
+            or not isinstance(min_android_api, int)
+            or not 24 <= min_android_api <= 1000
+        ):
+            raise ValueError("invalid plugin minAndroidApi")
 
     if channel == "release":
         if release.get("tag_name") != f"v{metadata.get('versionName')}":
