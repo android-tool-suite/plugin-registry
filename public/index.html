@@ -9,7 +9,8 @@
     :root {
       color-scheme: light dark;
       font-family: Inter, "Noto Sans SC", system-ui, sans-serif;
-      --accent: #168f7a;
+      --accent: light-dark(#006b5f, #82d5c6);
+      --on-accent: light-dark(#ffffff, #00372f);
       --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
       --border: color-mix(in srgb, currentColor 16%, transparent);
       --surface: color-mix(in srgb, Canvas 94%, var(--accent) 6%);
@@ -32,10 +33,10 @@
       color: CanvasText;
     }
     button { cursor: pointer; }
-    button.active { color: white; background: var(--accent); border-color: var(--accent); }
-    input { flex: 1; min-width: 240px; }
+    button.active { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+    input { flex: 1; min-width: 0; width: 100%; }
     section { margin-top: 34px; }
-    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit,minmax(290px,1fr)); }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit,minmax(min(100%,290px),1fr)); }
     .card { border: 1px solid var(--border); border-radius: 20px; padding: 20px; background: var(--surface); }
     .app-card { display: grid; grid-template-columns: minmax(0,1fr); max-width: 700px; }
     .tag { display: inline-flex; width: fit-content; border-radius: 999px; padding: 5px 10px; background: var(--accent-soft); color: var(--accent); font-weight: 650; }
@@ -44,7 +45,11 @@
     .version-picker select { width: 100%; }
     .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
     .actions a { display: inline-flex; align-items: center; text-decoration: none; border-radius: 12px; padding: 10px 14px; border: 1px solid var(--border); color: inherit; }
-    .actions a.primary { background: var(--accent); border-color: var(--accent); color: white; font-weight: 650; }
+    .actions a.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 650; }
+    .card, .version-panel { min-width: 0; overflow-wrap: anywhere; }
+    button, .actions a { min-height: 44px; }
+    select { max-width: 100%; }
+    [hidden] { display: none !important; }
     .version-meta { min-height: 3.4em; margin: 12px 0 0; font-size: .9rem; }
     .empty { border: 1px dashed var(--border); border-radius: 16px; padding: 20px; }
     footer { margin-top: 44px; padding-top: 20px; border-top: 1px solid var(--border); }
@@ -61,11 +66,13 @@
     <h1>Android Tool Suite 发布中心</h1>
     <p class="muted">下载安卓工具合集 APK 和组织维护的官方插件。正式版与调试版均保留可用的历史发布，可自行选择版本。</p>
     <div class="toolbar">
-      <button type="button" data-channel="release" class="active">正式版</button>
-      <button type="button" data-channel="debug">调试版</button>
+      <button type="button" data-channel="release" class="active" aria-pressed="true">正式版</button>
+      <button type="button" data-channel="debug" aria-pressed="false">调试版</button>
       <input id="search" type="search" placeholder="搜索插件名称、作者或说明" aria-label="搜索插件">
     </div>
     <p id="status" class="muted" aria-live="polite">正在读取发布目录…</p>
+    <p id="channel-warning" hidden>调试版本可能不稳定，下载前请确认所选渠道。</p>
+    <button type="button" id="retry" hidden>重新读取目录</button>
   </header>
 
   <main>
@@ -227,27 +234,35 @@
       currentChannel = channel;
       currentCatalog = null;
       document.querySelector('#status').textContent = '正在读取发布目录…';
+      document.querySelector('#retry').hidden = true;
+      document.querySelector('#channel-warning').hidden = channel !== 'debug';
       document.querySelector('#app').replaceChildren();
       document.querySelector('#plugins').replaceChildren();
-      document.querySelectorAll('[data-channel]').forEach(button =>
-        button.classList.toggle('active', button.dataset.channel === channel));
+      document.querySelectorAll('[data-channel]').forEach(button => {
+        button.classList.toggle('active', button.dataset.channel === channel);
+        button.setAttribute('aria-pressed', String(button.dataset.channel === channel));
+      });
       try {
         const response = await fetch(`./${channel}/catalog-v1.json`, {cache: 'no-cache'});
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const catalog = await response.json();
+        if (currentChannel !== channel) return;
         if (catalog.schemaVersion !== 1 || catalog.channel !== channel) {
           throw new Error('目录格式或通道不匹配');
         }
         currentCatalog = catalog;
         render();
       } catch (error) {
+        if (currentChannel !== channel) return;
         document.querySelector('#status').textContent = `发布目录暂不可用：${error.message}`;
+        document.querySelector('#retry').hidden = false;
       }
     }
 
     document.querySelectorAll('[data-channel]').forEach(button =>
       button.addEventListener('click', () => load(button.dataset.channel)));
     document.querySelector('#search').addEventListener('input', renderPlugins);
+    document.querySelector('#retry').addEventListener('click', () => load(currentChannel));
     load('release');
   </script>
 </body>
