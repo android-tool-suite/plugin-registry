@@ -237,6 +237,30 @@ class RegistryBuilderTest(unittest.TestCase):
 
         self.assertEqual(snapshot_entry, entry)
 
+    def test_fetch_entry_selects_latest_manual_debug_without_rolling_release(self):
+        snapshots = [
+            {"tagName": "debug-" + "a" * 40, "commitSha": "a" * 40,
+             "publishedAt": "2026-09-17T00:00:00Z", "versionCode": 1},
+            {"tagName": "debug-" + "b" * 40, "commitSha": "b" * 40,
+             "publishedAt": "2026-09-18T00:00:00Z", "versionCode": 2},
+        ]
+        with mock.patch.object(MODULE, "release_for_channel", return_value=None), \
+                mock.patch.object(MODULE, "releases_for_channel", return_value=snapshots), \
+                mock.patch.object(MODULE, "load_release_entry", side_effect=lambda _s, release, _c, _t: release):
+            entry = MODULE.fetch_entry({"repository": "owner/app"}, "debug", "debug")
+        self.assertEqual(snapshots[1], entry)
+
+    def test_fetch_entry_without_any_debug_release_returns_none(self):
+        with mock.patch.object(MODULE, "release_for_channel", return_value=None), \
+                mock.patch.object(MODULE, "releases_for_channel", return_value=[]):
+            self.assertIsNone(MODULE.fetch_entry({"repository": "owner/app"}, "debug", "debug"))
+
+    def test_missing_formal_release_does_not_fall_back_to_debug(self):
+        with mock.patch.object(MODULE, "release_for_channel", return_value=None), \
+                mock.patch.object(MODULE, "fetch_entries") as fetch_entries:
+            self.assertIsNone(MODULE.fetch_entry({"repository": "owner/app"}, "release", "debug"))
+        fetch_entries.assert_not_called()
+
     def test_fetch_entry_keeps_formal_release_asset_validation_strict(self):
         release = {"tag_name": "v1.0.0", "assets": []}
 

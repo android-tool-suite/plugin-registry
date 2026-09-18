@@ -240,6 +240,9 @@ def fetch_entry(
 ) -> dict[str, Any] | None:
     release = release_for_channel(source["repository"], channel, debug_tag, token)
     if release is None:
+        if channel == "debug":
+            entries = fetch_entries(source, channel, debug_tag, token)
+            return entries[0] if entries else None
         return None
     try:
         return load_release_entry(source, release, channel, token)
