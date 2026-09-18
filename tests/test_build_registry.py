@@ -135,6 +135,38 @@ class RegistryBuilderTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "snapshot tag mismatch"):
             MODULE.build_release_entry(source, release, metadata, "debug")
 
+    def test_semantic_debug_tag_matches_version_and_preserves_commit(self):
+        source = {"repository": "owner/sample", "type": "plugin", "tag": "debug"}
+        release = {
+            "tag_name": "debug-v1.8.0", "html_url": "https://github.test/debug-v1.8.0",
+            "assets": [{"name": "sample.atsplugin", "size": 21,
+                        "browser_download_url": "https://github.test/sample.atsplugin",
+                        "digest": "sha256:" + "ef" * 32}],
+        }
+        metadata = {"schemaVersion": 1, "type": "plugin", "channel": "debug",
+                    "commitSha": "a" * 40, "id": "sample", "versionName": "1.8.0",
+                    "versionCode": 24, "artifactName": "sample.atsplugin"}
+        entry = MODULE.build_release_entry(source, release, metadata, "debug")
+        self.assertEqual("debug-v1.8.0", entry["tagName"])
+        self.assertEqual("a" * 40, entry["commitSha"])
+        for invalid in ["debug-v1.8.1", "debug-vinvalid"]:
+            with self.subTest(tag=invalid), self.assertRaisesRegex(ValueError, "version tag mismatch"):
+                MODULE.build_release_entry(source, {**release, "tag_name": invalid}, metadata, "debug")
+        with self.assertRaisesRegex(ValueError, "no commit SHA"):
+            MODULE.build_release_entry(source, release, {**metadata, "commitSha": ""}, "debug")
+
+    def test_debug_history_accepts_semantic_versions_only_as_prereleases(self):
+        releases = [
+            {"tag_name": "debug-v1.8.0", "prerelease": True},
+            {"tag_name": "debug-v1.9.0-beta.1", "prerelease": True},
+            {"tag_name": "debug-v1.9.0", "prerelease": False},
+            {"tag_name": "debug-vinvalid", "prerelease": True},
+            {"tag_name": "debug-v2.0.0", "prerelease": True, "draft": True},
+        ]
+        with mock.patch.object(MODULE, "request_json", return_value=releases):
+            selected = MODULE.releases_for_channel("owner/app", "debug", "debug")
+        self.assertEqual(["debug-v1.8.0", "debug-v1.9.0-beta.1"], [r["tag_name"] for r in selected])
+
     def test_release_history_filters_drafts_and_other_tags(self):
         releases = [
             {"tag_name": "v2.0.0", "draft": False, "prerelease": False},

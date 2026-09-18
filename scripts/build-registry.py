@@ -98,6 +98,8 @@ def releases_for_channel(
                     releases.append(release)
             elif release.get("prerelease", False) and (
                 tag_name == debug_tag or debug_snapshot_pattern.fullmatch(tag_name)
+                or (tag_name.startswith(f"{debug_tag}-")
+                    and RELEASE_TAG_PATTERN.fullmatch(tag_name[len(debug_tag) + 1:]))
             ):
                 releases.append(release)
         if len(page_releases) < 100:
@@ -181,7 +183,12 @@ def build_release_entry(
     else:
         expected_tag = source.get("tag", "debug")
         release_tag = release.get("tag_name", "")
-        if release_tag != expected_tag and not re.fullmatch(
+        semantic_tag = release_tag.startswith(f"{expected_tag}-v")
+        if semantic_tag:
+            if not RELEASE_TAG_PATTERN.fullmatch(release_tag[len(expected_tag) + 1:]) or \
+                    release_tag != f"{expected_tag}-v{metadata.get('versionName')}":
+                raise ValueError(f"debug version tag mismatch for {source['repository']}")
+        elif release_tag != expected_tag and not re.fullmatch(
             rf"{re.escape(expected_tag)}-[0-9a-fA-F]{{40}}",
             release_tag,
         ):
@@ -189,7 +196,7 @@ def build_release_entry(
         commit_sha = metadata.get("commitSha", "")
         if not re.fullmatch(r"[0-9a-fA-F]{40}", commit_sha):
             raise ValueError(f"debug metadata has no commit SHA for {source['repository']}")
-        if release_tag != expected_tag and release_tag != f"{expected_tag}-{commit_sha}":
+        if not semantic_tag and release_tag != expected_tag and release_tag != f"{expected_tag}-{commit_sha}":
             raise ValueError(f"debug snapshot tag mismatch for {source['repository']}")
 
     excluded = {"schemaVersion", "type", "artifactName"}
