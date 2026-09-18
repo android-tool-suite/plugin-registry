@@ -40,7 +40,7 @@ jobs:
       - name: Test generator
         run: python -m unittest discover -s tests -v
 
-      - name: Build release and debug indexes
+      - name: Build release index and catalog
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -49,11 +49,6 @@ jobs:
             --channel release \
             --output public/release/index-v1.json \
             --catalog-output public/release/catalog-v1.json
-          python scripts/build-registry.py \
-            --sources sources.json \
-            --channel debug \
-            --output public/debug/index-v1.json \
-            --catalog-output public/debug/catalog-v1.json
 
       - name: Sign and verify indexes
         env:
@@ -62,13 +57,11 @@ jobs:
           test -n "$REGISTRY_SIGNING_KEY_PEM"
           printf '%s\n' "$REGISTRY_SIGNING_KEY_PEM" > "$RUNNER_TEMP/registry-private.pem"
           chmod 600 "$RUNNER_TEMP/registry-private.pem"
-          for channel in release debug; do
-            for payload in index-v1 catalog-v1; do
-              openssl dgst -sha256 -sign "$RUNNER_TEMP/registry-private.pem" \
-                -out "public/$channel/$payload.json.sig" "public/$channel/$payload.json"
-              openssl dgst -sha256 -verify registry-public.pem \
-                -signature "public/$channel/$payload.json.sig" "public/$channel/$payload.json"
-            done
+          for payload in index-v1 catalog-v1; do
+            openssl dgst -sha256 -sign "$RUNNER_TEMP/registry-private.pem" \
+              -out "public/release/$payload.json.sig" "public/release/$payload.json"
+            openssl dgst -sha256 -verify registry-public.pem \
+              -signature "public/release/$payload.json.sig" "public/release/$payload.json"
           done
           cp public/release/index-v1.json public/index-v1.json
           cp public/release/index-v1.json.sig public/index-v1.json.sig

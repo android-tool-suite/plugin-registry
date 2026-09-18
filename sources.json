@@ -4,10 +4,7 @@
     "repository": "android-tool-suite/app",
     "title": "安卓工具合集",
     "description": "Android Tool Suite 宿主应用，支持 Shizuku、插件管理与可扩展工具页。",
-    "artifactNames": {
-      "release": "android-tool-suite.apk",
-      "debug": "android-tool-suite-debug.apk"
-    }
+    "artifactName": "android-tool-suite.apk"
   },
   "pluginDiscovery": {
     "organization": "android-tool-suite",
@@ -15,6 +12,5 @@
     "excludedRepositories": [
       "android-tool-suite/plugin-registry"
     ]
-  },
-  "debugTag": "debug"
+  }
 }

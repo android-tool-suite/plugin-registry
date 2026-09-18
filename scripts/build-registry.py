@@ -12,12 +12,11 @@ import re
 import sys
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
 from typing import Any
 
 API_ROOT = "https://api.github.com"
-CHANNELS = {"release", "debug"}
+CHANNELS = {"release"}
 RELEASE_TAG_PATTERN = re.compile(r"^v\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
 
 
@@ -51,15 +50,11 @@ def request_json(url: str, token: str | None = None) -> Any:
 def release_for_channel(
     repository: str,
     channel: str,
-    debug_tag: str,
     token: str | None = None,
 ) -> dict[str, Any] | None:
-    if channel == "release":
-        endpoint = "releases/latest"
-    elif channel == "debug":
-        endpoint = f"releases/tags/{urllib.parse.quote(debug_tag, safe='')}"
-    else:
+    if channel not in CHANNELS:
         raise ValueError(f"unsupported channel: {channel}")
+    endpoint = "releases/latest"
     try:
         return request_json(f"{API_ROOT}/repos/{repository}/{endpoint}", token)
     except urllib.error.HTTPError as error:
@@ -71,7 +66,6 @@ def release_for_channel(
 def releases_for_channel(
     repository: str,
     channel: str,
-    debug_tag: str,
     token: str | None = None,
 ) -> list[dict[str, Any]]:
     """Return every component release that belongs to the requested channel."""
@@ -79,9 +73,6 @@ def releases_for_channel(
         raise ValueError(f"unsupported channel: {channel}")
     releases: list[dict[str, Any]] = []
     page = 1
-    debug_snapshot_pattern = re.compile(
-        rf"^{re.escape(debug_tag)}-[0-9a-fA-F]{{40}}$"
-    )
     while True:
         page_releases = request_json(
             f"{API_ROOT}/repos/{repository}/releases?per_page=100&page={page}",
@@ -93,14 +84,7 @@ def releases_for_channel(
             if release.get("draft", False):
                 continue
             tag_name = release.get("tag_name", "")
-            if channel == "release":
-                if not release.get("prerelease", False) and RELEASE_TAG_PATTERN.fullmatch(tag_name):
-                    releases.append(release)
-            elif release.get("prerelease", False) and (
-                tag_name == debug_tag or debug_snapshot_pattern.fullmatch(tag_name)
-                or (tag_name.startswith(f"{debug_tag}-")
-                    and RELEASE_TAG_PATTERN.fullmatch(tag_name[len(debug_tag) + 1:]))
-            ):
+            if not release.get("prerelease", False) and RELEASE_TAG_PATTERN.fullmatch(tag_name):
                 releases.append(release)
         if len(page_releases) < 100:
             break
@@ -153,12 +137,7 @@ def build_release_entry(
     if metadata_channel != channel:
         raise ValueError(f"metadata channel mismatch for {source['repository']}")
 
-    artifact_names = source.get("artifactNames", {})
-    artifact_name = (
-        artifact_names.get(channel)
-        or source.get("artifactName")
-        or metadata.get("artifactName")
-    )
+    artifact_name = source.get("artifactName") or metadata.get("artifactName")
     if not artifact_name or metadata.get("artifactName") != artifact_name:
         raise ValueError(f"metadata artifact mismatch for {source['repository']}")
     artifact = asset_by_name(release, artifact_name)
@@ -177,27 +156,10 @@ def build_release_entry(
         ):
             raise ValueError("invalid plugin minAndroidApi")
 
-    if channel == "release":
-        if release.get("tag_name") != f"v{metadata.get('versionName')}":
-            raise ValueError(f"release tag mismatch for {source['repository']}")
-    else:
-        expected_tag = source.get("tag", "debug")
-        release_tag = release.get("tag_name", "")
-        semantic_tag = release_tag.startswith(f"{expected_tag}-v")
-        if semantic_tag:
-            if not RELEASE_TAG_PATTERN.fullmatch(release_tag[len(expected_tag) + 1:]) or \
-                    release_tag != f"{expected_tag}-v{metadata.get('versionName')}":
-                raise ValueError(f"debug version tag mismatch for {source['repository']}")
-        elif release_tag != expected_tag and not re.fullmatch(
-            rf"{re.escape(expected_tag)}-[0-9a-fA-F]{{40}}",
-            release_tag,
-        ):
-            raise ValueError(f"debug tag mismatch for {source['repository']}")
-        commit_sha = metadata.get("commitSha", "")
-        if not re.fullmatch(r"[0-9a-fA-F]{40}", commit_sha):
-            raise ValueError(f"debug metadata has no commit SHA for {source['repository']}")
-        if not semantic_tag and release_tag != expected_tag and release_tag != f"{expected_tag}-{commit_sha}":
-            raise ValueError(f"debug snapshot tag mismatch for {source['repository']}")
+    if release.get("prerelease", False) or release.get("draft", False):
+        raise ValueError("only published formal releases are supported")
+    if release.get("tag_name") != f"v{metadata.get('versionName')}":
+        raise ValueError(f"release tag mismatch for {source['repository']}")
 
     excluded = {"schemaVersion", "type", "artifactName"}
     entry = {key: value for key, value in metadata.items() if key not in excluded}
@@ -226,60 +188,24 @@ def load_release_entry(
     return build_release_entry(source, release, metadata, channel)
 
 
-def rolling_debug_release_is_incomplete(
-    error: Exception,
-    release: dict[str, Any],
-    channel: str,
-    debug_tag: str,
-) -> bool:
-    if channel != "debug" or release.get("tag_name") != debug_tag:
-        return False
-    if isinstance(error, MissingReleaseAssetError):
-        return True
-    return isinstance(error, urllib.error.HTTPError) and error.code == 404
-
-
 def fetch_entry(
     source: dict[str, Any],
     channel: str,
-    debug_tag: str,
     token: str | None = None,
 ) -> dict[str, Any] | None:
-    release = release_for_channel(source["repository"], channel, debug_tag, token)
-    if release is None:
-        if channel == "debug":
-            entries = fetch_entries(source, channel, debug_tag, token)
-            return entries[0] if entries else None
-        return None
-    try:
-        return load_release_entry(source, release, channel, token)
-    except (MissingReleaseAssetError, urllib.error.HTTPError) as error:
-        if not rolling_debug_release_is_incomplete(
-            error, release, channel, debug_tag
-        ):
-            raise
-        entries = fetch_entries(source, channel, debug_tag, token)
-        return entries[0] if entries else None
+    release = release_for_channel(source["repository"], channel, token)
+    return None if release is None else load_release_entry(source, release, channel, token)
 
 
 def fetch_entries(
     source: dict[str, Any],
     channel: str,
-    debug_tag: str,
     token: str | None = None,
 ) -> list[dict[str, Any]]:
-    entries = []
-    for release in releases_for_channel(
-        source["repository"], channel, debug_tag, token
-    ):
-        try:
-            entries.append(load_release_entry(source, release, channel, token))
-        except (MissingReleaseAssetError, urllib.error.HTTPError) as error:
-            if rolling_debug_release_is_incomplete(
-                error, release, channel, debug_tag
-            ):
-                continue
-            raise
+    entries = [
+        load_release_entry(source, release, channel, token)
+        for release in releases_for_channel(source["repository"], channel, token)
+    ]
 
     entries.sort(
         key=lambda item: (
@@ -292,9 +218,7 @@ def fetch_entries(
     unique_entries = []
     seen = set()
     for entry in entries:
-        identity = (
-            entry.get("commitSha") if channel == "debug" else entry.get("tagName")
-        )
+        identity = entry.get("tagName")
         if identity in seen:
             continue
         seen.add(identity)
@@ -346,19 +270,14 @@ def build_index(
         raise ValueError("unsupported source schema")
     if channel not in CHANNELS:
         raise ValueError(f"unsupported channel: {channel}")
-    debug_tag = sources.get("debugTag", "debug")
 
     app_source = dict(sources["app"])
     app_source["type"] = "app"
-    if channel == "debug":
-        app_source["tag"] = debug_tag
-    app_entry = fetch_entry(app_source, channel, debug_tag, token)
+    app_entry = fetch_entry(app_source, channel, token)
 
     plugins = []
     for source in discover_plugin_sources(sources["pluginDiscovery"], token):
-        if channel == "debug":
-            source["tag"] = debug_tag
-        entry = fetch_entry(source, channel, debug_tag, token)
+        entry = fetch_entry(source, channel, token)
         if entry is not None:
             plugins.append(entry)
     plugins.sort(key=lambda item: (item.get("title", "").casefold(), item["id"]))
@@ -380,19 +299,14 @@ def build_catalog(
         raise ValueError("unsupported source schema")
     if channel not in CHANNELS:
         raise ValueError(f"unsupported channel: {channel}")
-    debug_tag = sources.get("debugTag", "debug")
 
     app_source = dict(sources["app"])
     app_source["type"] = "app"
-    if channel == "debug":
-        app_source["tag"] = debug_tag
-    app_versions = fetch_entries(app_source, channel, debug_tag, token)
+    app_versions = fetch_entries(app_source, channel, token)
 
     plugin_groups = []
     for source in discover_plugin_sources(sources["pluginDiscovery"], token):
-        if channel == "debug":
-            source["tag"] = debug_tag
-        versions = fetch_entries(source, channel, debug_tag, token)
+        versions = fetch_entries(source, channel, token)
         if not versions:
             continue
         current = versions[0]

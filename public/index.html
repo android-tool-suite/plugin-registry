@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Android Tool Suite 应用与官方插件的正式版、调试版和历史版本下载。">
+  <meta name="description" content="Android Tool Suite 应用与官方插件的正式版和历史版本下载。">
   <title>Android Tool Suite 发布中心</title>
   <style>
     :root {
@@ -64,14 +64,11 @@
   <header>
     <span class="tag">官方发布</span>
     <h1>Android Tool Suite 发布中心</h1>
-    <p class="muted">下载安卓工具合集 APK 和组织维护的官方插件。正式版与调试版均保留可用的历史发布，可自行选择版本。</p>
+    <p class="muted">下载安卓工具合集 APK 和组织维护的官方插件。保留正式历史发布，可自行选择版本。</p>
     <div class="toolbar">
-      <button type="button" data-channel="release" class="active" aria-pressed="true">正式版</button>
-      <button type="button" data-channel="debug" aria-pressed="false">调试版</button>
       <input id="search" type="search" placeholder="搜索插件名称、作者或说明" aria-label="搜索插件">
     </div>
     <p id="status" class="muted" aria-live="polite">正在读取发布目录…</p>
-    <p id="channel-warning" hidden>调试版本可能不稳定，下载前请确认所选渠道。</p>
     <button type="button" id="retry" hidden>重新读取目录</button>
   </header>
 
@@ -87,11 +84,10 @@
   </main>
 
   <footer class="muted">
-    <p>应用和插件与宿主进程共享权限，请只安装可信发布。调试快照用于联调；日常使用建议选择正式版。</p>
+    <p>应用和插件与宿主进程共享权限，请只安装可信发布。</p>
   </footer>
 
   <script>
-    let currentChannel = 'release';
     let currentCatalog = null;
 
     const dateFormatter = new Intl.DateTimeFormat('zh-CN', {
@@ -111,9 +107,6 @@
 
     function versionLabel(version) {
       const base = `v${version.versionName} (${version.versionCode})`;
-      if (currentChannel === 'debug' && version.commitSha) {
-        return `${base} · ${version.commitSha.slice(0, 7)} · ${formatDate(version.publishedAt)}`;
-      }
       return `${base} · ${formatDate(version.publishedAt)}`;
     }
 
@@ -122,7 +115,7 @@
       panel.className = 'version-panel';
       if (!versions.length) {
         panel.className += ' empty';
-        panel.textContent = '此通道暂时没有可下载版本。';
+        panel.textContent = '暂时没有可下载的正式版本。';
         return panel;
       }
 
@@ -176,7 +169,7 @@
       const copy = document.createElement('div');
       const tag = document.createElement('span');
       tag.className = 'tag';
-      tag.textContent = currentChannel === 'release' ? '稳定版 APK' : '调试版 APK';
+      tag.textContent = '稳定版 APK';
       const title = document.createElement('h3');
       title.textContent = app.title;
       const description = document.createElement('p');
@@ -230,40 +223,30 @@
       renderPlugins();
     }
 
-    async function load(channel) {
-      currentChannel = channel;
+    async function load() {
       currentCatalog = null;
       document.querySelector('#status').textContent = '正在读取发布目录…';
       document.querySelector('#retry').hidden = true;
-      document.querySelector('#channel-warning').hidden = channel !== 'debug';
       document.querySelector('#app').replaceChildren();
       document.querySelector('#plugins').replaceChildren();
-      document.querySelectorAll('[data-channel]').forEach(button => {
-        button.classList.toggle('active', button.dataset.channel === channel);
-        button.setAttribute('aria-pressed', String(button.dataset.channel === channel));
-      });
       try {
-        const response = await fetch(`./${channel}/catalog-v1.json`, {cache: 'no-cache'});
+        const response = await fetch('./release/catalog-v1.json', {cache: 'no-cache'});
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const catalog = await response.json();
-        if (currentChannel !== channel) return;
-        if (catalog.schemaVersion !== 1 || catalog.channel !== channel) {
+        if (catalog.schemaVersion !== 1 || catalog.channel !== 'release') {
           throw new Error('目录格式或通道不匹配');
         }
         currentCatalog = catalog;
         render();
       } catch (error) {
-        if (currentChannel !== channel) return;
         document.querySelector('#status').textContent = `发布目录暂不可用：${error.message}`;
         document.querySelector('#retry').hidden = false;
       }
     }
 
-    document.querySelectorAll('[data-channel]').forEach(button =>
-      button.addEventListener('click', () => load(button.dataset.channel)));
     document.querySelector('#search').addEventListener('input', renderPlugins);
-    document.querySelector('#retry').addEventListener('click', () => load(currentChannel));
-    load('release');
+    document.querySelector('#retry').addEventListener('click', () => load());
+    load();
   </script>
 </body>
 </html>
