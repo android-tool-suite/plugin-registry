@@ -137,8 +137,11 @@ def build_release_entry(
     if metadata_channel != channel:
         raise ValueError(f"metadata channel mismatch for {source['repository']}")
 
-    artifact_name = source.get("artifactName") or metadata.get("artifactName")
-    if not artifact_name or metadata.get("artifactName") != artifact_name:
+    artifact_name = metadata.get("artifactName")
+    expected_artifacts = {source["artifactName"]} if source.get("artifactName") else set()
+    if source.get("artifactNameTemplate"):
+        expected_artifacts.add(source["artifactNameTemplate"].format(versionName=metadata.get("versionName")))
+    if not artifact_name or (expected_artifacts and artifact_name not in expected_artifacts):
         raise ValueError(f"metadata artifact mismatch for {source['repository']}")
     artifact = asset_by_name(release, artifact_name)
     digest = artifact.get("digest") or ""

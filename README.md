@@ -12,6 +12,8 @@
 
 插件 `release-metadata.json` 可以携带 `dataCompatibility`，声明本版本写入的数据格式以及可读取范围。生成器验证后将声明写入历史目录；旧 Release 缺少声明时按数据格式 `v0` 处理，新版可通过把最小可读版本声明为 `0` 来承接旧数据。
 
+新发布资产使用 `android-tool-suite-v<versionName>.apk`、`<插件包名称>-v<versionName>.atsplugin`。`release-metadata.json` 的 `artifactName` 与 `SHA256SUMS.txt` 使用同一实际文件名，生成器按元数据精确查找资产并校验摘要。宿主来源同时声明新名称模板与旧的固定名称，保持历史发布可用；插件来源继续按各 Release 的元数据定位。
+
 ## 事件驱动更新
 
 本仓库不再定时轮询组件仓库。应用或插件工作流完成发布后，通过 GitHub `repository_dispatch` 发送 `component_published` 事件；本仓库随后重新生成正式最新索引与历史目录并部署 GitHub Pages。短时间内的多个事件由 Actions 并发组自动合并，最终部署最新状态。
@@ -40,7 +42,7 @@
 
 ## 本地验证
 
-生成器单元测试不访问网络：
+生成器与网页行为测试不访问网络，需要 Python 3 与 Node.js 18 或更新版本。网页测试使用本地目录夹具验证版本选择、下载链接、详情导航和失败恢复，不会把夹具写入发布页：
 
 ```powershell
 python -m unittest discover -s tests -v

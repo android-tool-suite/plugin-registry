@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import pathlib
 import unittest
 from unittest import mock
@@ -12,6 +13,56 @@ SPEC.loader.exec_module(MODULE)
 
 
 class RegistryBuilderTest(unittest.TestCase):
+    def test_app_source_accepts_versioned_assets_and_legacy_history(self):
+        source = json.loads(
+            (SCRIPT.parents[1] / "sources.json").read_text(encoding="utf-8")
+        )["app"]
+        for name in ("android-tool-suite-v2.1.0.apk", "android-tool-suite.apk"):
+            with self.subTest(name=name):
+                release, metadata = self.app_release_fixture(name)
+                entry = MODULE.build_release_entry(source, release, metadata, "release")
+                self.assertEqual("https://github.test/" + name, entry["downloadUrl"])
+                self.assertEqual("ab" * 32, entry["sha256"])
+
+    def test_versioned_app_asset_must_match_metadata_version_and_component(self):
+        source = {
+            "repository": "owner/app", "type": "app",
+            "artifactName": "android-tool-suite.apk",
+            "artifactNameTemplate": "android-tool-suite-v{versionName}.apk",
+        }
+        for name in ("android-tool-suite-v2.0.0.apk", "different-app-v2.1.0.apk", "android-tool-suite-v2.1.0.zip"):
+            with self.subTest(name=name):
+                release, metadata = self.app_release_fixture(name)
+                with self.assertRaisesRegex(ValueError, "artifact mismatch"):
+                    MODULE.build_release_entry(source, release, metadata, "release")
+
+    def test_exact_versioned_asset_is_required_even_when_legacy_asset_exists(self):
+        source = {
+            "repository": "owner/app", "type": "app",
+            "artifactName": "android-tool-suite.apk",
+            "artifactNameTemplate": "android-tool-suite-v{versionName}.apk",
+        }
+        release, metadata = self.app_release_fixture("android-tool-suite-v2.1.0.apk")
+        release["assets"][0]["name"] = "android-tool-suite.apk"
+        with self.assertRaises(MODULE.MissingReleaseAssetError):
+            MODULE.build_release_entry(source, release, metadata, "release")
+
+    def test_discovered_plugin_uses_exact_versioned_asset_from_metadata(self):
+        name = "sample-v2.1.0.atsplugin"
+        release, metadata = self.app_release_fixture(name)
+        metadata.update({"type": "plugin", "id": "sample"})
+        entry = MODULE.build_release_entry({"repository": "owner/plugin-sample", "type": "plugin"}, release, metadata, "release")
+        self.assertEqual("https://github.test/" + name, entry["downloadUrl"])
+
+    @staticmethod
+    def app_release_fixture(name):
+        return ({
+            "tag_name": "v2.1.0", "html_url": "https://github.test/release",
+            "assets": [{"name": name, "browser_download_url": "https://github.test/" + name,
+                        "size": 12, "digest": "sha256:" + "ab" * 32}],
+        }, {"schemaVersion": 1, "type": "app", "channel": "release", "versionName": "2.1.0",
+            "versionCode": 24, "artifactName": name})
+
     def test_build_release_entry_uses_github_digest(self):
         source = {
             "id": "sample",
